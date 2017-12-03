@@ -60,10 +60,19 @@ class GDOptimizer(object):
         self.beta = beta
         self.vel = 0.0
 
+    def func(self, x):
+        return 0.01 * x * x
+
     def update_params(self, params, grad):
         # Update parameters using GD with momentum and return
         # the updated parameters
-        return None
+
+        # params: params[0] current, params[1] previous
+        zeta = - self.lr * grad * self.func(params[0]) + self.beta * (params[0] -
+            params[1])
+
+        params_new = params[0] + zeta
+        return params_new
 
 
 class SVM(object):
@@ -136,18 +145,28 @@ def optimize_test_function(optimizer, w_init=10.0, steps=200):
     Optimize the simple quadratic test function and return the parameter history.
     '''
 
-    def func(x):
-        return 0.01 * x * x
-
     def func_grad(x):
         return 0.02 * x
 
     w = w_init
     w_history = [w_init]
 
+    w_previous = w_init
+    i = 0
     for _ in range(steps):
         # Optimize and update the history
-        pass
+        # compute gradient and momentum here
+
+        # now optimize, and update w
+        w_set = [w, w_previous]
+        w = optimizer.update_params(w_set, func_grad(w))
+        w_history.append(w)
+        # update w_previous
+        w_previous = w_history[i]
+        i += 1
+
+    print(w_history)
+
     return w_history
 
 
@@ -160,5 +179,29 @@ def optimize_svm(train_data, train_targets, penalty, optimizer, batchsize, iters
     return None
 
 
+def part2_1():
+    optimizer_1 = GDOptimizer(lr=1.0, beta=0.0)
+    w_history_1 = optimize_test_function(optimizer_1, w_init=10.0, steps=200)
+
+    optimizer_2 = GDOptimizer(lr=1.0, beta=0.9)
+    w_history_2 = optimize_test_function(optimizer_2, w_init=10.0, steps=200)
+
+    plt.figure(1)
+
+    line1, = plt.plot(w_history_1, 'b--',label='beta = 0')
+    line2, = plt.plot(w_history_2, 'r--', label='beta = 0.9')
+    first_legend = plt.legend(handles=[line1, line2], loc=1)
+
+    plt.ylabel('w history points')
+    plt.xlabel('number of iteration')
+
+
+    plt.show()
+
+
+
 if __name__ == '__main__':
+    # this will demo the GDOptimizer function
+    part2_1()
+
     pass
