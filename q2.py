@@ -60,19 +60,13 @@ class GDOptimizer(object):
         self.beta = beta
         self.vel = 0.0
 
-    def func(self, x):
-        return 0.01 * x * x
 
     def update_params(self, params, grad):
         # Update parameters using GD with momentum and return
         # the updated parameters
 
-        # params: params[0] current, params[1] previous
-        zeta = - self.lr * grad * self.func(params[0]) + self.beta * (params[0] -
-            params[1])
-
-        params_new = params[0] + zeta
-        return params_new
+        self.vel = - self.lr * grad + self.beta * self.vel
+        return params + self.vel
 
 
 class SVM(object):
@@ -91,7 +85,10 @@ class SVM(object):
         Returns a length-n vector containing the hinge-loss per data point.
         '''
         # Implement hinge loss
-        return None
+        diff = 1 - y * (self.w * X)
+        loss = self.c * np.sum(self.w[diff > 0])/X.shape[0]
+        return loss
+
 
     def grad(self, X, y):
         '''
@@ -148,25 +145,23 @@ def optimize_test_function(optimizer, w_init=10.0, steps=200):
     def func_grad(x):
         return 0.02 * x
 
+    def get(x):
+        return 0.01 * x * x
+
     w = w_init
     w_history = [w_init]
 
-    w_previous = w_init
-    i = 0
+
     for _ in range(steps):
         # Optimize and update the history
         # compute gradient and momentum here
 
         # now optimize, and update w
-        w_set = [w, w_previous]
-        w = optimizer.update_params(w_set, func_grad(w))
+        # note: followed the demo and not gonna perform get(w) scale
+        w = optimizer.update_params(w, func_grad(w))
         w_history.append(w)
-        # update w_previous
-        w_previous = w_history[i]
-        i += 1
 
     print(w_history)
-
     return w_history
 
 
@@ -194,14 +189,12 @@ def part2_1():
 
     plt.ylabel('w history points')
     plt.xlabel('number of iteration')
-
-
     plt.show()
 
 
 
 if __name__ == '__main__':
     # this will demo the GDOptimizer function
-    part2_1()
+    # part2_1()
 
     pass
