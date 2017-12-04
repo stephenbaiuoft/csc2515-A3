@@ -89,7 +89,7 @@ class SVM(object):
         # max{1 - y_i * (w * x_i), 0 }
 
         # Implement hinge loss
-        loss = 1-y*(self.w * X)
+        loss = 1 -y*(np.dot(X, self.w))
         # set indices less than 0 as 0
         loss[np.where(loss < 0)] = 0
         return loss
@@ -109,9 +109,15 @@ class SVM(object):
         indice = hinge_loss_vector > 0
 
         # step 1.0: compute sub-gradient
-        gradient_t = self.c * self.w[indice] \
-                     - np.sum(y[indice] * X[indice]) / k
+        # note y*x ==> is scalar broadcast
+        y_set = y[indice].reshape(-1, 1)
+        x_set = X[indice]
+        sum_vector = np.sum(y_set * x_set, axis=0)
 
+        gradient_t = self.c * self.w\
+                     - sum_vector/k
+
+        print("svm gradient shape is: ", gradient_t.shape)
         return gradient_t
 
 
@@ -122,7 +128,14 @@ class SVM(object):
         Returns the predicted class labels (shape (n,))
         '''
         # Classify points as +1 or -1
-        return None
+        predict_vector = np.dot(X, self.w)
+
+        # those greater than 0: 1
+        predict_vector[predict_vector > 0] = 1
+        # those smaller than 0: -1
+        predict_vector[predict_vector < 0] = -1
+        # return finished predict_vector
+        return predict_vector
 
 
 def load_data():
@@ -186,8 +199,8 @@ def optimize_svm(train_data, train_targets, penalty, optimizer, batchsize, iters
     '''
 
     # add columns of ones to train_data
-    train_data = add_bias(train_data)
-    feature_count = train_data[0]
+    feature_count = train_data.shape[1]
+    print("feature_count is: ", feature_count)
 
     batchsampler = BatchSampler(train_data, train_targets, batchsize)
 
@@ -208,7 +221,8 @@ def optimize_svm(train_data, train_targets, penalty, optimizer, batchsize, iters
         # optimize based on svm?
         w_t_half = svm.w - learning_rate * sub_grad
         # now update the next parameter
-        ratio = 1/((w_t_half ** 2) * np.sqrt(penalty))
+        ratio = 1/(np.sum(w_t_half ** 2) * np.sqrt(penalty))
+        print("ratio is: ", ratio)
         svm.w = w_t_half * np.min([1, ratio])
 
     return svm
@@ -220,10 +234,13 @@ def add_bias(X_data):
     n = X_data.shape[0]
     # debug
     print("original shape is: ", X_data.shape)
-    train_data = np.append(X_data, np.ones(shape=(n,1)), axis=1)
+    X_data = np.append(X_data, np.ones(shape=(n,1)), axis=1)
     print("modified shape is now: ", X_data.shape)
 
+    return X_data
 
+
+# note 4 is "1" and 9 is -1!!
 def part2_3():
     # prints the required parameters
     def evaluate(svm, train_data, train_targets,
@@ -238,54 +255,23 @@ def part2_3():
         print("Test: the averaged hinge_loss is: ", hinge_loss)
 
         # 3. The classification accuracy on the training set.
-        predict_a = (svm.w * train_data) > 0
-        predict_b = (svm.w * train_data) < 0
 
-        a_i_4 = train_targets[predict_a] == 4
-        a_i_9 = train_targets[predict_a] == 9
-
-        b_i_4 = train_targets[predict_b] == 4
-        b_i_9 = train_targets[predict_b] == 9
-
-        correct_count = 0
-        # check which predict_a is for class 4 majority
-        if train_targets[a_i_4].shape[0] > \
-            train_targets[b_i_4].shape[0]:
-            correct_count =\
-                train_targets[a_i_4].shape[0] + train_targets[b_i_9].shape[0]
-        # predict_a is for class 9 majority
-        else:
-            correct_count =\
-                train_targets[a_i_9].shape[0] + train_targets[b_i_4].shape[0]
+        predict = svm.classify(train_data)
+        correct_count = np.where(predict == train_targets)[0].shape[0]
 
         train_accuracy = correct_count / train_data.shape[0]
         print("Training accuracy is: ", train_accuracy)
 
         # 4. The classification accuracy on the test set.
-        predict_a = (svm.w * train_data) > 0
-        predict_b = (svm.w * train_data) < 0
+        predict = svm.classify(test_data)
+        correct_count = np.where(predict == test_targets)[0].shape[0]
 
-        a_i_4 = test_targets[predict_a] == 4
-        a_i_9 = test_targets[predict_a] == 9
-
-        b_i_4 = test_targets[predict_b] == 4
-        b_i_9 = test_targets[predict_b] == 9
-
-        correct_count = 0
-        # check which predict_a is for class 4 majority
-        if test_targets[a_i_4].shape[0] > \
-                test_targets[b_i_4].shape[0]:
-            correct_count = \
-                test_targets[a_i_4].shape[0] + test_targets[b_i_9].shape[0]
-        # predict_a is for class 9 majority
-        else:
-            correct_count = \
-                test_targets[a_i_9].shape[0] + test_targets[b_i_4].shape[0]
         test_accuracy = correct_count / test_data.shape[0]
         print("Test accuracy is: ", test_accuracy)
 
-        # 5. Plot w as a 28×28image.
 
+        # 5. Plot w as a 28×28image.
+        plot_images(svm.w)
 
 
     # load the corresponding  4,9 class data
@@ -307,9 +293,22 @@ def part2_3():
     svm_2 = optimize_svm(train_data, train_targets, penalty,
                          optimizer_2, batchsize, iters)
 
+    evaluate(svm_1, train_data, train_targets,
+             test_data, test_targets)
 
+    evaluate(svm_2, train_data, train_targets,
+             test_data, test_targets)
 
-
+# plot svm_weight from 784 to 28x28
+def plot_images(svm_weight):
+    '''
+    Plot each of t
+    '''
+    # back to 785 -> 784 -> 28 x 28
+    svm_weight = svm_weight[:-1].reshape(28,28)
+    plt.imshow(svm_weight, cmap='gray')
+    #plt.title('10 class eta side by side graph')
+    plt.show()
 
 
 
@@ -337,4 +336,4 @@ if __name__ == '__main__':
     # this will demo the GDOptimizer function
     # part2_1()
 
-    pass
+    part2_3()
