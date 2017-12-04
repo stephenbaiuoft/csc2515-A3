@@ -75,8 +75,10 @@ class SVM(object):
     '''
 
     def __init__(self, c, feature_count):
+        # c is the regularization parameter by definition
         self.c = c
         self.w = np.random.normal(0.0, 0.1, feature_count)
+
 
     def hinge_loss(self, X, y):
         '''
@@ -84,9 +86,12 @@ class SVM(object):
 
         Returns a length-n vector containing the hinge-loss per data point.
         '''
+        # max{1 - y_i * (w * x_i), 0 }
+
         # Implement hinge loss
-        diff = 1 - y * (self.w * X)
-        loss = self.c * np.sum(self.w[diff > 0])/X.shape[0]
+        loss = 1-y*(self.w * X)
+        # set indices less than 0 as 0
+        loss[np.where(loss < 0)] = 0
         return loss
 
 
@@ -98,7 +103,17 @@ class SVM(object):
         Returns the gradient with respect to the SVM parameters (shape (m,)).
         '''
         # Compute (sub-)gradient of SVM objective
-        return None
+        # assume X, y are batched inputs
+        k = X.shape[0]
+        hinge_loss_vector = self.hinge_loss(X, y)
+        indice = hinge_loss_vector > 0
+
+        # step 1.0: compute sub-gradient
+        gradient_t = self.c * self.w[indice] \
+                     - np.sum(y[indice] * X[indice]) / k
+
+        return gradient_t
+
 
     def classify(self, X):
         '''
@@ -150,8 +165,6 @@ def optimize_test_function(optimizer, w_init=10.0, steps=200):
 
     w = w_init
     w_history = [w_init]
-
-
     for _ in range(steps):
         # Optimize and update the history
         # compute gradient and momentum here
@@ -171,7 +184,134 @@ def optimize_svm(train_data, train_targets, penalty, optimizer, batchsize, iters
 
     SVM weights can be updated using the attribute 'w'. i.e. 'svm.w = updated_weights'
     '''
-    return None
+
+    # add columns of ones to train_data
+    train_data = add_bias(train_data)
+    feature_count = train_data[0]
+
+    batchsampler = BatchSampler(train_data, train_targets, batchsize)
+
+    # init svm object: feature for bias
+    # make sure penalty is > 0?!!
+    svm = SVM(penalty, feature_count)
+    for t in range(1, iters + 1):
+        # compute learning_rate
+        learning_rate = 1 / (t * penalty)
+
+        # get batch data
+        X_batch, y_batch = batchsampler.get_batch()
+        sub_grad = svm.grad(X_batch, y_batch)
+
+        # update the svm.w (params, gradient)
+        svm.w = optimizer.update_params(svm.w, sub_grad)
+
+        # optimize based on svm?
+        w_t_half = svm.w - learning_rate * sub_grad
+        # now update the next parameter
+        ratio = 1/((w_t_half ** 2) * np.sqrt(penalty))
+        svm.w = w_t_half * np.min([1, ratio])
+
+    return svm
+
+
+# add columns of ones to X_data
+def add_bias(X_data):
+    # add columns of ones to train_data
+    n = X_data.shape[0]
+    # debug
+    print("original shape is: ", X_data.shape)
+    train_data = np.append(X_data, np.ones(shape=(n,1)), axis=1)
+    print("modified shape is now: ", X_data.shape)
+
+
+def part2_3():
+    # prints the required parameters
+    def evaluate(svm, train_data, train_targets,
+                 test_data, test_targets):
+        # 1. The training loss: the hinge loss.
+        hinge_loss_vector = svm.hinge_loss(train_data, train_targets)
+        hinge_loss = np.sum(hinge_loss_vector) / train_data.shape[0]
+        print("Train: the averaged hinge_loss is: ", hinge_loss)
+        # 2. The test loss.
+        hinge_loss_vector = svm.hinge_loss(test_data, test_targets)
+        hinge_loss = np.sum(hinge_loss_vector) / test_data.shape[0]
+        print("Test: the averaged hinge_loss is: ", hinge_loss)
+
+        # 3. The classification accuracy on the training set.
+        predict_a = (svm.w * train_data) > 0
+        predict_b = (svm.w * train_data) < 0
+
+        a_i_4 = train_targets[predict_a] == 4
+        a_i_9 = train_targets[predict_a] == 9
+
+        b_i_4 = train_targets[predict_b] == 4
+        b_i_9 = train_targets[predict_b] == 9
+
+        correct_count = 0
+        # check which predict_a is for class 4 majority
+        if train_targets[a_i_4].shape[0] > \
+            train_targets[b_i_4].shape[0]:
+            correct_count =\
+                train_targets[a_i_4].shape[0] + train_targets[b_i_9].shape[0]
+        # predict_a is for class 9 majority
+        else:
+            correct_count =\
+                train_targets[a_i_9].shape[0] + train_targets[b_i_4].shape[0]
+
+        train_accuracy = correct_count / train_data.shape[0]
+        print("Training accuracy is: ", train_accuracy)
+
+        # 4. The classification accuracy on the test set.
+        predict_a = (svm.w * train_data) > 0
+        predict_b = (svm.w * train_data) < 0
+
+        a_i_4 = test_targets[predict_a] == 4
+        a_i_9 = test_targets[predict_a] == 9
+
+        b_i_4 = test_targets[predict_b] == 4
+        b_i_9 = test_targets[predict_b] == 9
+
+        correct_count = 0
+        # check which predict_a is for class 4 majority
+        if test_targets[a_i_4].shape[0] > \
+                test_targets[b_i_4].shape[0]:
+            correct_count = \
+                test_targets[a_i_4].shape[0] + test_targets[b_i_9].shape[0]
+        # predict_a is for class 9 majority
+        else:
+            correct_count = \
+                test_targets[a_i_9].shape[0] + test_targets[b_i_4].shape[0]
+        test_accuracy = correct_count / test_data.shape[0]
+        print("Test accuracy is: ", test_accuracy)
+
+        # 5. Plot w as a 28×28image.
+
+
+
+    # load the corresponding  4,9 class data
+    train_data, train_targets, test_data, test_targets = load_data()
+
+    # add columns of ones to x_data
+    train_data = add_bias(train_data)
+    test_data = add_bias(test_data)
+
+    # init optimizer as directed
+    optimizer_1 = GDOptimizer(lr=0.05, beta=0.0)
+    optimizer_2 = GDOptimizer(lr=0.05, beta=0.1)
+
+    penalty = 1.0
+    batchsize = 100
+    iters = 500
+    svm_1 = optimize_svm(train_data, train_targets, penalty,
+                     optimizer_1, batchsize, iters)
+    svm_2 = optimize_svm(train_data, train_targets, penalty,
+                         optimizer_2, batchsize, iters)
+
+
+
+
+
+
 
 
 def part2_1():
